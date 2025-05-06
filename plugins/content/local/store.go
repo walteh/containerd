@@ -101,7 +101,7 @@ func (s *store) Info(ctx context.Context, dgst digest.Digest) (content.Info, err
 	if err != nil {
 		return content.Info{}, fmt.Errorf("calculating blob info path: %w", err)
 	}
-
+	fmt.Println("AHHHHHH", p)
 	fi, err := os.Stat(p)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -136,9 +136,10 @@ func (s *store) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (content.
 	if err != nil {
 		return nil, fmt.Errorf("calculating blob path for ReaderAt: %w", err)
 	}
-
+	fmt.Println("READERAT AGGGGGGG", p)
 	reader, err := OpenReader(p)
 	if err != nil {
+
 		return nil, fmt.Errorf("blob %s expected at %s: %w", desc.Digest, p, err)
 	}
 

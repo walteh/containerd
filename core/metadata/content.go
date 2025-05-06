@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/binary"
 	"fmt"
+	"runtime/debug"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -708,19 +709,22 @@ func (cs *contentStore) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (
 	if err := cs.checkAccess(ctx, desc.Digest); err != nil {
 		return nil, err
 	}
+	// fmt.Printf("READERAT type(%T) %v\n", cs.Store, desc.Digest)
 	return cs.Store.ReaderAt(ctx, desc)
 }
 
 func (cs *contentStore) checkAccess(ctx context.Context, dgst digest.Digest) error {
 	ns, err := namespaces.NamespaceRequired(ctx)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to get namespace: %w", err)
 	}
 
 	return view(ctx, cs.db, func(tx *bolt.Tx) error {
 		bkt := getBlobBucket(tx, ns, dgst)
 		if bkt == nil {
-			return fmt.Errorf("content digest %v: %w", dgst, errdefs.ErrNotFound)
+			fmt.Printf("CHECK ACCESS ERROR type(%T) %s %v\n", cs.Store, ns, dgst)
+			debug.PrintStack()
+			return fmt.Errorf("checking access to content digest %v: %w", dgst, errdefs.ErrNotFound)
 		}
 		return nil
 	})

@@ -67,9 +67,11 @@ func (s *fsApplier) Apply(ctx context.Context, desc ocispec.Descriptor, mounts [
 		}
 	}
 
+	fmt.Printf("APPLY type(%T) %v\n", s.store, desc.Digest)
+
 	ra, err := s.store.ReaderAt(ctx, desc)
 	if err != nil {
-		return emptyDesc, fmt.Errorf("failed to get reader from content store: %w", err)
+		return emptyDesc, fmt.Errorf("failed to get reader from content store type(%T): %w", s.store, err)
 	}
 	defer ra.Close()
 

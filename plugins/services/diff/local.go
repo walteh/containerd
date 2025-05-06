@@ -21,19 +21,20 @@ import (
 	"fmt"
 
 	diffapi "github.com/containerd/containerd/api/services/diff/v1"
-	"github.com/containerd/errdefs"
-	"github.com/containerd/errdefs/pkg/errgrpc"
-	"github.com/containerd/plugin"
-	"github.com/containerd/plugin/registry"
-	"github.com/containerd/typeurl/v2"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	"google.golang.org/grpc"
-
 	"github.com/containerd/containerd/v2/core/diff"
 	"github.com/containerd/containerd/v2/core/mount"
 	"github.com/containerd/containerd/v2/pkg/oci"
 	"github.com/containerd/containerd/v2/plugins"
 	"github.com/containerd/containerd/v2/plugins/services"
+	"github.com/containerd/errdefs"
+	"github.com/containerd/errdefs/pkg/errgrpc"
+	"github.com/containerd/plugin"
+	"github.com/containerd/plugin/registry"
+	"github.com/containerd/typeurl/v2"
+	"github.com/k0kubun/pp/v3"
+	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/encoding/protojson"
 )
 
 type config struct {
@@ -105,6 +106,13 @@ func (l *local) Apply(ctx context.Context, er *diffapi.ApplyRequest, _ ...grpc.C
 		desc    = oci.DescriptorFromProto(er.Diff)
 		mounts  = mount.FromProto(er.Mounts)
 	)
+
+	// convert diffapi to json with protojson
+	json, err := protojson.Marshal(er)
+	if err != nil {
+		return nil, err
+	}
+	pp.Println(string(json))
 
 	var opts []diff.ApplyOpt
 	if er.Payloads != nil {

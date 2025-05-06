@@ -44,6 +44,8 @@ func (m *Mount) mount(target string) error {
 	}
 	args = append(args, m.Source, target)
 
+	fmt.Println("BINDING", commandName, args)
+
 	cmd := exec.Command(commandName, args...)
 	output, err := cmd.CombinedOutput()
 	if err != nil {

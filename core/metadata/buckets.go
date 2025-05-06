@@ -139,6 +139,8 @@
 package metadata
 
 import (
+	"fmt"
+
 	digest "github.com/opencontainers/go-digest"
 	bolt "go.etcd.io/bbolt"
 )
@@ -181,6 +183,11 @@ var (
 )
 
 func getBucket(tx *bolt.Tx, keys ...[]byte) *bolt.Bucket {
+	bstrings := []string{}
+	for _, key := range keys {
+		bstrings = append(bstrings, string(key))
+	}
+
 	bkt := tx.Bucket(keys[0])
 
 	for _, key := range keys[1:] {
@@ -189,6 +196,7 @@ func getBucket(tx *bolt.Tx, keys ...[]byte) *bolt.Bucket {
 		}
 		bkt = bkt.Bucket(key)
 	}
+	fmt.Println("GET BUCKET", bkt == nil, bstrings)
 
 	return bkt
 }

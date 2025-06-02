@@ -19,11 +19,15 @@
 package sys
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 
+	"github.com/containerd/log"
 	"golang.org/x/sys/unix"
 )
 
@@ -54,12 +58,24 @@ func GetLocalListener(path string, uid, gid int) (net.Listener, error) {
 		return l, fmt.Errorf("failed to create unix socket on %s: %w", path, err)
 	}
 
-	if err := os.Chmod(path, 0660); err != nil {
+	if err := os.Chmod(path, 0o660); err != nil { // rw‑rw‑---
 		l.Close()
 		return nil, err
 	}
 
 	if err := os.Chown(path, uid, gid); err != nil {
+		// part of rootless macos
+		// TODO: figure out if this is actually needed
+		// didn't put much thought into this or test it much, could have security implications
+		if runtime.GOOS == "darwin" && errors.Is(err, syscall.EPERM) {
+			if st, statErr := os.Stat(path); statErr == nil {
+				if sys, ok := st.Sys().(*syscall.Stat_t); ok &&
+					int(sys.Uid) == uid && int(sys.Gid) == gid {
+					log.L.Warn("ignoring darwin EPERM from chown; socket will stay private to current user")
+					return l, nil // already owned by desired user/group
+				}
+			}
+		}
 		l.Close()
 		return nil, err
 	}

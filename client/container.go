@@ -302,6 +302,7 @@ func (c *container) NewTask(ctx context.Context, ioCreate cio.Creator, opts ...N
 		tracing.Attribute("task.process.id", int(response.Pid)),
 	)
 	t.pid = response.Pid
+
 	return t, nil
 }
 

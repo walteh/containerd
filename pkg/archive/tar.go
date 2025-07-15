@@ -394,6 +394,20 @@ func createTarFile(ctx context.Context, path, extractDir string, hdr *tar.Header
 	}
 
 	if !noSameOwner {
+		// // check if the user and group are already correct
+		// if runtime.GOOS == "darwin" && syscall.Getuid() != 0 {
+		// 	return nil // skip chown if we're not root - user maintains permissions
+		// 	// if fi, err := os.Lstat(path); err == nil {
+		// 	// 	fmt.Println("fi.Sys().(*syscall.Stat_t).Uid", fi.Sys().(*syscall.Stat_t).Uid)
+		// 	// 	fmt.Println("fi.Sys().(*syscall.Stat_t).Gid", fi.Sys().(*syscall.Stat_t).Gid)
+		// 	// 	fmt.Println("hdr.Uid", hdr.Uid)
+		// 	// 	fmt.Println("hdr.Gid", hdr.Gid)
+		// 	// 	if fi.Sys().(*syscall.Stat_t).Uid == uint32(hdr.Uid) && fi.Sys().(*syscall.Stat_t).Gid == uint32(hdr.Gid) {
+		// 	// 		return nil
+		// 	// 	}
+		// 	// }
+		// }
+
 		if err := os.Lchown(path, hdr.Uid, hdr.Gid); err != nil {
 			err = fmt.Errorf("failed to Lchown %q for UID %d, GID %d: %w", path, hdr.Uid, hdr.Gid, err)
 			if errors.Is(err, syscall.EINVAL) && userns.RunningInUserNS() {

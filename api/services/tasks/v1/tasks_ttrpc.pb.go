@@ -4,6 +4,8 @@ package tasks
 
 import (
 	context "context"
+	"log/slog"
+
 	ttrpc "github.com/containerd/ttrpc"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 )
@@ -36,6 +38,9 @@ func RegisterTTRPCTasksService(srv *ttrpc.Server, svc TTRPCTasksService) {
 				if err := unmarshal(&req); err != nil {
 					return nil, err
 				}
+				defer func() {
+					slog.Info("YEH task created 6", "id", req.ContainerID)
+				}()
 				return svc.Create(ctx, &req)
 			},
 			"Start": func(ctx context.Context, unmarshal func(interface{}) error) (interface{}, error) {

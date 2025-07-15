@@ -21,6 +21,7 @@ package tasks
 import (
 	"context"
 	"errors"
+	"log/slog"
 	"net/url"
 	"os"
 	"os/signal"
@@ -117,6 +118,7 @@ func NewTask(ctx context.Context, client *containerd.Client, container container
 	stdinC.closer = func() {
 		t.CloseIO(ctx, containerd.WithStdinCloser)
 	}
+	slog.Info("YEH task created over here 4", "id", container.ID(), "pid", t.Pid())
 	return t, nil
 }
 

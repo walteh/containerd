@@ -18,6 +18,7 @@ package plugin
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/containerd/containerd/v2/plugins"
 	"github.com/containerd/containerd/v2/plugins/snapshots/blockfile"
@@ -75,7 +76,11 @@ func init() {
 			opts = append(opts, blockfile.WithRecreateScratch(config.RecreateScratch))
 
 			ic.Meta.Exports[plugins.SnapshotterRootDir] = root
-			return blockfile.NewSnapshotter(root, opts...)
+			snapshotter, err := blockfile.NewSnapshotter(root, opts...)
+			if err != nil {
+				return nil, fmt.Errorf("failed to create blockfile snapshotter at %s: %w", root, err)
+			}
+			return snapshotter, nil
 		},
 	})
 }

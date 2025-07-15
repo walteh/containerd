@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"log/slog"
 	"os"
 	"path/filepath"
 	"time"
@@ -255,6 +256,7 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 	}
 	c, err := rtime.Create(ctx, r.ContainerID, opts)
 	if err != nil {
+		log.G(ctx).Error("failed to create task", "error", err)
 		return nil, errgrpc.ToGRPC(err)
 	}
 	labels := map[string]string{"runtime": container.Runtime.Name}
@@ -265,6 +267,7 @@ func (l *local) Create(ctx context.Context, r *api.CreateTaskRequest, _ ...grpc.
 	if err != nil {
 		return nil, fmt.Errorf("failed to get task pid: %w", err)
 	}
+	slog.Info("YEH task created 2", "id", r.ContainerID, "pid", pid)
 	return &api.CreateTaskResponse{
 		ContainerID: r.ContainerID,
 		Pid:         pid,
@@ -352,7 +355,7 @@ func getProcessState(ctx context.Context, p runtime.Process) (*task.Process, err
 		if errdefs.IsNotFound(err) || errdefs.IsUnavailable(err) {
 			return nil, err
 		}
-		log.G(ctx).WithError(err).Errorf("get state for %s", p.ID())
+		log.G(ctx).WithError(err).Errorf("get state for %s - %T - %v", p.ID(), err, err)
 	}
 	status := task.Status_UNKNOWN
 	switch state.Status {

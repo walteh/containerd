@@ -33,6 +33,11 @@ func init() {
 		ID:     "bindir",
 		Config: defaultConfig(),
 		InitFn: func(ic *plugin.InitContext) (interface{}, error) {
+			// if ic.Config == nil {
+			// 	stack := debug.Stack()
+			// 	log.G(ic.Context).Errorf("imageverifier: config is nil: %s", stack)
+			// 	return nil, fmt.Errorf("imageverifier: config is nil")
+			// }
 			cfg := ic.Config.(*bindir.Config)
 			return bindir.NewImageVerifier(cfg), nil
 		},

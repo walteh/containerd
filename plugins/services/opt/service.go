@@ -22,6 +22,7 @@ import (
 	"path/filepath"
 
 	"github.com/containerd/containerd/v2/plugins"
+	"github.com/containerd/log"
 	"github.com/containerd/plugin"
 	"github.com/containerd/plugin/registry"
 )
@@ -40,6 +41,9 @@ func init() {
 			Path: defaultPath,
 		},
 		InitFn: func(ic *plugin.InitContext) (interface{}, error) {
+			if ic.Config == nil {
+				log.G(ic.Context).Errorf("config is nil")
+			}
 			path := ic.Config.(*Config).Path
 			ic.Meta.Exports["path"] = path
 			bin := filepath.Join(path, "bin")

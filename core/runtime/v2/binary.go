@@ -113,13 +113,19 @@ func (b *binary) Start(ctx context.Context, opts *types.Any, onClose func()) (_ 
 			log.G(ctx).WithError(err).Error("copy shim log")
 		}
 	}()
-	out, err := cmd.CombinedOutput()
+	out := bytes.NewBuffer(nil)
+	cmd.Stdout = out
+	
+	err = cmd.Run()
 	if err != nil {
-		return nil, fmt.Errorf("%s: %w", out, err)
+		return nil, err
 	}
-	response := bytes.TrimSpace(out)
+	response := bytes.TrimSpace(out.Bytes())
 
-	onCloseWithShimLog := func() {
+	onCloseWithShimLog := func(err error) {
+		// if err != nil {
+		// 	log.G(ctx).WithError(err).Error("shim disconnected")
+		// }
 		onClose()
 		cancelShimLog()
 		f.Close()
@@ -194,7 +200,11 @@ func (b *binary) Delete(ctx context.Context) (*runtime.Exit, error) {
 	)
 	cmd.Stdout = out
 	cmd.Stderr = errb
-	if err := cmd.Run(); err != nil {
+	
+	err = cmd.Run()
+	
+	
+	if err != nil {
 		log.G(ctx).WithFields(log.Fields{
 			"cmd":   cmd.String(),
 			"error": err,

@@ -18,6 +18,7 @@ package tasks
 
 import (
 	"errors"
+	"log/slog"
 
 	"github.com/containerd/console"
 	containerd "github.com/containerd/containerd/v2/client"
@@ -96,6 +97,7 @@ var startCommand = &cli.Command{
 		if err != nil {
 			return err
 		}
+		slog.Info("YEH task created over here 5", "id", container.ID(), "pid", task.Pid())
 		var statusC <-chan containerd.ExitStatus
 		if !detach {
 			defer func() {

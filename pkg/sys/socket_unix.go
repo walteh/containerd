@@ -21,6 +21,7 @@ package sys
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -67,14 +68,33 @@ func GetLocalListener(path string, uid, gid int) (net.Listener, error) {
 		// part of rootless macos
 		// TODO: figure out if this is actually needed
 		// didn't put much thought into this or test it much, could have security implications
-		if runtime.GOOS == "darwin" && errors.Is(err, syscall.EPERM) {
-			if st, statErr := os.Stat(path); statErr == nil {
-				if sys, ok := st.Sys().(*syscall.Stat_t); ok &&
-					int(sys.Uid) == uid && int(sys.Gid) == gid {
-					log.L.Warn("ignoring darwin EPERM from chown; socket will stay private to current user")
-					return l, nil // already owned by desired user/group
-				}
+		var pathErr *fs.PathError
+		if syscall.Getuid() != 0 && runtime.GOOS == "darwin" && errors.As(err, &pathErr) {
+			// log.L.WithError(err).WithFields(log.Fields{
+			// 	"path":           path,
+			// 	"uid":            uid,
+			// 	"gid":            gid,
+			// 	"type":           reflect.TypeOf(err).String(),
+			// 	"pathErr":        pathErr,
+			// 	"pathErr.Op":     pathErr.Op,
+			// 	"pathErr.Path":   pathErr.Path,
+			// 	"pathErr.Err":    pathErr.Err,
+			// 	"pathErr.ErrPtr": uintptr((pathErr.Err).(syscall.Errno)),
+			// 	"pathErrType":    reflect.TypeOf(pathErr.Err).String(),
+			// }).Error("failed to chown socket")
+
+			if pathErr.Op == "chown" && errors.Is(pathErr.Err, syscall.EPERM) {
+				log.L.Warn("ignoring darwin EPERM from chown; socket will stay private to current user")
+				return l, nil // already owned by desired user/group
 			}
+
+			// if st, statErr := os.Stat(path); statErr == nil {
+			// 	if sys, ok := st.Sys().(*syscall.Stat_t); ok &&
+			// 		int(sys.Uid) == uid && int(sys.Gid) == gid {
+			// 		log.L.Warn("ignoring darwin EPERM from chown; socket will stay private to current user")
+			// 		return l, nil // already owned by desired user/group
+			// 	}
+			// }
 		}
 		l.Close()
 		return nil, err

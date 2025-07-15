@@ -99,7 +99,10 @@ func loadShim(ctx context.Context, bundle *Bundle, onClose func()) (_ ShimInstan
 			log.G(shimCtx).WithError(err).Error("copy shim log after reload")
 		}
 	}()
-	onCloseWithShimLog := func() {
+	onCloseWithShimLog := func(err error) {
+		// if err != nil {
+		// 	log.G(shimCtx).WithError(err).Error("shim disconnected")
+		// }
 		onClose()
 		cancelShimLog()
 		f.Close()
@@ -278,7 +281,7 @@ func readBootstrapParams(path string) (client.BootstrapParams, error) {
 
 // makeConnection creates a new TTRPC or GRPC connection object from address.
 // address can be either a socket path for TTRPC or JSON serialized BootstrapParams.
-func makeConnection(ctx context.Context, id string, params client.BootstrapParams, onClose func()) (_ io.Closer, retErr error) {
+func makeConnection(ctx context.Context, id string, params client.BootstrapParams, onClose func(error)) (_ io.Closer, retErr error) {
 	log.G(ctx).WithFields(log.Fields{
 		"address":  params.Address,
 		"protocol": params.Protocol,
@@ -299,16 +302,26 @@ func makeConnection(ctx context.Context, id string, params client.BootstrapParam
 
 		return ttrpc.NewClient(
 			conn,
-			ttrpc.WithOnClose(onClose),
+			// ttrpc.WithOnClose(func() {
+			// 	onClose(nil)
+			// }),
+			ttrpc.WithOnClose(func() {
+				onClose(nil)
+			}),
+			// ttrpc.WithClientDebugging(),
+			// ttrpc.WithOnCloseError(onClose),
 			ttrpc.WithUnaryClientInterceptor(otelttrpc.UnaryClientInterceptor()),
 		), nil
 	case "grpc":
 		gopts := []grpc.DialOption{
+			grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),   //nolint:staticcheck // Ignore SA1019. Deprecation assumes use of [grpc.NewClient] but we are not using that here.
-			grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()), //nolint:staticcheck // Ignore SA1019. Deprecation assumes use of [grpc.NewClient] but we are not using that here.
+			// grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),   //nolint:staticcheck // Ignore SA1019. Deprecation assumes use of [grpc.NewClient] but we are not using that here.
+			// grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()), //nolint:staticcheck // Ignore SA1019. Deprecation assumes use of [grpc.NewClient] but we are not using that here.
 		}
-		return grpcDialContext(params.Address, onClose, gopts...)
+		return grpcDialContext(params.Address, func() {
+			onClose(nil)
+		}, gopts...)
 	default:
 		return nil, fmt.Errorf("unexpected protocol: %q", params.Protocol)
 	}
@@ -660,6 +673,8 @@ func (s *shimTask) Create(ctx context.Context, opts runtime.CreateOpts) (runtime
 		}
 	}
 
+	log.G(ctx).Info("YEH task created", "id", s.ID())
+
 	return s, nil
 }
 
@@ -686,6 +701,7 @@ func (s *shimTask) Start(ctx context.Context) error {
 		ID: s.ID(),
 	})
 	if err != nil {
+		log.G(ctx).Error("failed to start task", "error", err)
 		return errgrpc.ToNative(err)
 	}
 	return nil

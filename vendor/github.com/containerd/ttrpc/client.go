@@ -51,6 +51,8 @@ type Client struct {
 	userCloseFunc   func()
 	userCloseWaitCh chan struct{}
 
+	debugging bool
+
 	interceptor UnaryClientInterceptor
 }
 
@@ -61,6 +63,13 @@ type ClientOpts func(c *Client)
 func WithOnClose(onClose func()) ClientOpts {
 	return func(c *Client) {
 		c.userCloseFunc = onClose
+	}
+}
+
+// WithDebugging enables debugging for the client
+func WithDebugging() ClientOpts {
+	return func(c *Client) {
+		c.debugging = true
 	}
 }
 

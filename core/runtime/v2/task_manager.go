@@ -181,6 +181,8 @@ func (m *TaskManager) Create(ctx context.Context, taskID string, opts runtime.Cr
 			shimTask.Close()
 		}
 
+		log.G(ctx).WithError(err).Error("failed to create shim task")
+
 		return nil, fmt.Errorf("failed to create shim task: %w", err)
 	}
 

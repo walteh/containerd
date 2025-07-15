@@ -102,6 +102,10 @@ type Config struct {
 	NoReaper bool
 	// NoSetupLogger disables automatic configuration of logrus to use the shim FIFO
 	NoSetupLogger bool
+	Stdout        io.WriteCloser
+	Stdin         io.ReadCloser
+	ExitFunc      func(int)
+	WithArgs      []string
 }
 
 type TTRPCService interface {
@@ -114,6 +118,25 @@ type TTRPCServerUnaryOptioner interface {
 
 type TTRPCClientUnaryOptioner interface {
 	UnaryClientInterceptor() ttrpc.UnaryClientInterceptor
+}
+
+func WithExitFunc(exitFunc func(int)) BinaryOpts {
+	return func(config *Config) {
+		config.ExitFunc = exitFunc
+	}
+}
+
+func WithArgs(args []string) BinaryOpts {
+	return func(config *Config) {
+		config.WithArgs = args
+	}
+}
+
+func WithStdio(stdin io.ReadCloser, stdout io.WriteCloser) BinaryOpts {
+	return func(config *Config) {
+		config.Stdin = stdin
+		config.Stdout = stdout
+	}
 }
 
 var (
@@ -137,7 +160,7 @@ const (
 	maxVersionEnv   = "MAX_SHIM_VERSION"
 )
 
-func parseFlags() {
+func parseFlags(args []string) {
 	flag.BoolVar(&debugFlag, "debug", false, "enable debug output in logs")
 	flag.BoolVar(&versionFlag, "v", false, "show the shim version and exit")
 	// "info" is not a subcommand, because old shims produce very confusing errors for unknown subcommands
@@ -154,8 +177,9 @@ func parseFlags() {
 		fmt.Sprintf("path to publish binary (used for publishing events), but %s will ignore this flag, please use the %s env", os.Args[0], ttrpcAddressEnv),
 	)
 
-	flag.Parse()
-	action = flag.Arg(0)
+	flag.CommandLine.Parse(args)
+
+	action = flag.CommandLine.Arg(0)
 }
 
 func setRuntime() {
@@ -193,16 +217,34 @@ func Run(ctx context.Context, manager Manager, opts ...BinaryOpts) {
 		o(&config)
 	}
 
+	if config.Stdin == nil {
+		config.Stdin = os.Stdin
+	}
+	if config.Stdout == nil {
+		config.Stdout = os.Stdout
+	}
+
+	if config.ExitFunc == nil {
+		config.ExitFunc = func(code int) {
+			fmt.Fprintf(os.Stderr, "SHIM_EXIT: pid=%d code=%d\n", os.Getpid(), code)
+			os.Exit(code)
+		}
+	}
+
+	if config.WithArgs == nil {
+		config.WithArgs = os.Args[1:]
+	}
+
 	ctx = log.WithLogger(ctx, log.G(ctx).WithField("runtime", manager.Name()))
 
 	if err := run(ctx, manager, config); err != nil {
-		fmt.Fprintf(os.Stderr, "%s: %s", manager.Name(), err)
-		os.Exit(1)
+		log.G(ctx).WithError(err).Errorf("shim: %s: %s", manager.Name(), err)
+		config.ExitFunc(1)
 	}
 }
 
-func runInfo(ctx context.Context, manager Manager) error {
-	info, err := manager.Info(ctx, os.Stdin)
+func runInfo(ctx context.Context, manager Manager, config Config) error {
+	info, err := manager.Info(ctx, config.Stdin)
 	if err != nil {
 		return err
 	}
@@ -210,12 +252,13 @@ func runInfo(ctx context.Context, manager Manager) error {
 	if err != nil {
 		return err
 	}
-	_, err = os.Stdout.Write(infoB)
+	_, err = config.Stdout.Write(infoB)
 	return err
 }
 
 func run(ctx context.Context, manager Manager, config Config) error {
-	parseFlags()
+
+	parseFlags(config.WithArgs)
 	if versionFlag {
 		fmt.Printf("%s:\n", filepath.Base(os.Args[0]))
 		fmt.Println("  Version: ", version.Version)
@@ -226,7 +269,7 @@ func run(ctx context.Context, manager Manager, config Config) error {
 	}
 
 	if infoFlag {
-		return runInfo(ctx, manager)
+		return runInfo(ctx, manager, config)
 	}
 
 	if namespaceFlag == "" {
@@ -237,12 +280,12 @@ func run(ctx context.Context, manager Manager, config Config) error {
 
 	signals, err := setupSignals(config)
 	if err != nil {
-		return err
+		return fmt.Errorf("setting up signals: %w", err)
 	}
 
 	if !config.NoSubreaper {
 		if err := subreaper(); err != nil {
-			return err
+			return fmt.Errorf("setting up subreaper: %w", err)
 		}
 	}
 
@@ -274,10 +317,10 @@ func run(ctx context.Context, manager Manager, config Config) error {
 			ExitedAt:   protobuf.ToTimestamp(ss.ExitedAt),
 		})
 		if err != nil {
-			return err
+			return fmt.Errorf("stopping manager: %w", err)
 		}
-		if _, err := os.Stdout.Write(data); err != nil {
-			return err
+		if _, err := config.Stdout.Write(data); err != nil {
+			return fmt.Errorf("writing delete response: %w", err)
 		}
 		return nil
 	case "start":
@@ -289,7 +332,7 @@ func run(ctx context.Context, manager Manager, config Config) error {
 
 		params, err := manager.Start(ctx, id, opts)
 		if err != nil {
-			return err
+			return fmt.Errorf("starting manager: %w", err)
 		}
 
 		data, err := json.Marshal(&params)
@@ -297,8 +340,8 @@ func run(ctx context.Context, manager Manager, config Config) error {
 			return fmt.Errorf("failed to marshal bootstrap params to json: %w", err)
 		}
 
-		if _, err := os.Stdout.Write(data); err != nil {
-			return err
+		if _, err := config.Stdout.Write(data); err != nil {
+			return fmt.Errorf("writing bootstrap params: %w", err)
 		}
 
 		return nil
@@ -307,7 +350,7 @@ func run(ctx context.Context, manager Manager, config Config) error {
 	if !config.NoSetupLogger {
 		ctx, err = setLogger(ctx, id)
 		if err != nil {
-			return err
+			return fmt.Errorf("setting up logger: %w", err)
 		}
 	}
 
@@ -345,9 +388,19 @@ func run(ctx context.Context, manager Manager, config Config) error {
 		pprofHandler server
 	)
 
+	// log.G(ctx).WithFields(log.Fields{
+	// 	"grpc-address":  addressFlag,
+	// 	"ttrpc-address": ttrpcAddress,
+	// 	"bundle-path":   bundlePath,
+	// }).Debug("loading plugins")
+
 	for _, p := range registry.Graph(func(*plugin.Registration) bool { return false }) {
 		pID := p.URI()
-		log.G(ctx).WithFields(log.Fields{"id": pID, "type": p.Type}).Debug("loading plugin")
+		// log.G(ctx).WithFields(log.Fields{
+		// 	"id":   pID,
+		// 	"type": p.Type,
+		// 	"uri":  filepath.Join("[bundle-path]", p.URI()),
+		// }).Debug("loading plugin")
 
 		initContext := plugin.NewContext(
 			ctx,
@@ -365,12 +418,16 @@ func run(ctx context.Context, manager Manager, config Config) error {
 
 		// load the plugin specific configuration if it is provided
 		// TODO: Read configuration passed into shim, or from state directory?
-		// if p.Config != nil {
-		//	pc, err := config.Decode(p)
-		//	if err != nil {
-		//		return nil, err
-		//	}
-		//	initContext.Config = pc
+		// if p.Config != nil && initContext.Config == nil {
+		// pc, err := config.Decode(p)
+		// 	// if err != nil {
+		// 	// 	return nil, err
+		// 	// }
+		// 	initContext.Config = p.Config
+		// }
+
+		// if initContext.Config == nil {
+		// 	log.G(ctx).Warnf("plugin %s: config is nil", pID)
 		// }
 
 		result := p.Init(initContext)
@@ -420,9 +477,10 @@ func run(ctx context.Context, manager Manager, config Config) error {
 	}
 
 	if err := serve(ctx, server, signals, sd.Shutdown, pprofHandler); err != nil {
+		fmt.Fprintf(os.Stderr, "SHIM_EXIT: pid=%d code=1\n", os.Getpid())
 		if !errors.Is(err, shutdown.ErrShutdown) {
 			cleanupSockets(ctx)
-			return err
+			return fmt.Errorf("serving: %w", err)
 		}
 	}
 

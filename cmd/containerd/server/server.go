@@ -116,6 +116,12 @@ func CreateTopLevelDirectories(config *srvconfig.Config) error {
 	return nil
 }
 
+var hackedServerOptions = []grpc.ServerOption{}
+
+func AddHackedServerOption(opt grpc.ServerOption) {
+	hackedServerOptions = append(hackedServerOptions, opt)
+}
+
 // New creates and initializes a new containerd server
 func New(ctx context.Context, config *srvconfig.Config) (*Server, error) {
 	var (
@@ -217,6 +223,10 @@ func New(ctx context.Context, config *srvconfig.Config) (*Server, error) {
 	// ttrpcService allows TTRPC services to be registered with the underlying server
 	type ttrpcService interface {
 		RegisterTTRPC(*ttrpc.Server) error
+	}
+
+	if len(hackedServerOptions) > 0 {
+		serverOpts = append(serverOpts, hackedServerOptions...)
 	}
 
 	var (

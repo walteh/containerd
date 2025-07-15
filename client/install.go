@@ -93,7 +93,7 @@ func (c *Client) Install(ctx context.Context, image Image, opts ...InstallOpts) 
 
 		opts := []archive.ApplyOpt{filter}
 
-		if runtime.GOOS == "windows" {
+		if runtime.GOOS == "windows" || (runtime.GOOS == "darwin" && os.Getuid() != 0) {
 			opts = append(opts, archive.WithNoSameOwner())
 		}
 

@@ -305,8 +305,9 @@ func makeConnection(ctx context.Context, id string, params client.BootstrapParam
 	case "grpc":
 		gopts := []grpc.DialOption{
 			grpc.WithTransportCredentials(insecure.NewCredentials()),
-			grpc.WithUnaryInterceptor(otelgrpc.UnaryClientInterceptor()),   //nolint:staticcheck // Ignore SA1019. Deprecation assumes use of [grpc.NewClient] but we are not using that here.
-			grpc.WithStreamInterceptor(otelgrpc.StreamClientInterceptor()), //nolint:staticcheck // Ignore SA1019. Deprecation assumes use of [grpc.NewClient] but we are not using that here.
+			// the otelgrpc UnaryClientInterceptor and StreamClientInterceptor don't exist anymore
+			// worth noting that right now it isn't even possible to hit this code path, shims only use ttrpc
+			grpc.WithStatsHandler(otelgrpc.NewClientHandler()),
 		}
 		return grpcDialContext(params.Address, onClose, gopts...)
 	default:

@@ -257,6 +257,7 @@ func (o *snapshotter) createSnapshot(ctx context.Context, kind snapshots.Kind, k
 				}
 				copyDirOpts := []fs.CopyDirOpt{
 					fs.WithXAttrErrorHandler(xattrErrorHandler),
+					fs.WithXAttrExclude("com.apple.provenance"), // just to avoid all the errors
 				}
 				if err = fs.CopyDir(td, parent, copyDirOpts...); err != nil {
 					return fmt.Errorf("copying of parent failed: %w", err)

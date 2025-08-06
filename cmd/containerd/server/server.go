@@ -86,7 +86,14 @@ func CreateTopLevelDirectories(config *srvconfig.Config) error {
 	if err := sys.MkdirAllWithACL(config.State, 0o711); err != nil {
 		return err
 	}
-	if config.State != defaults.DefaultStateDir {
+
+	// for now we are handling the shim and the fifo dir to support rootless macos
+	// we modified nerdctl to override its use of the fifo dir to use a custom user accessible directory
+	// the other places that are not adjsuted are part of the 'ctr' cmomand (look for refs to task.NewTask)
+	// we have adjusted the macos shim to create a socket next to the containerd socket
+	bypassDefaultStateDir := runtime.GOOS == "darwin" && os.Getuid() != 0
+
+	if !bypassDefaultStateDir && config.State != defaults.DefaultStateDir {
 		// XXX: socketRoot in pkg/shim is hard-coded to the default state directory.
 		// See https://github.com/containerd/containerd/issues/10502#issuecomment-2249268582 for why it's set up that way.
 		// The default fifo directory in pkg/cio is also configured separately and defaults to the default state directory instead of the configured state directory.
@@ -114,6 +121,12 @@ func CreateTopLevelDirectories(config *srvconfig.Config) error {
 		}
 	}
 	return nil
+}
+
+var hackedServerOptions = []grpc.ServerOption{}
+
+func AddHackedServerOption(opt grpc.ServerOption) {
+	hackedServerOptions = append(hackedServerOptions, opt)
 }
 
 // New creates and initializes a new containerd server
@@ -217,6 +230,10 @@ func New(ctx context.Context, config *srvconfig.Config) (*Server, error) {
 	// ttrpcService allows TTRPC services to be registered with the underlying server
 	type ttrpcService interface {
 		RegisterTTRPC(*ttrpc.Server) error
+	}
+
+	if len(hackedServerOptions) > 0 {
+		serverOpts = append(serverOpts, hackedServerOptions...)
 	}
 
 	var (

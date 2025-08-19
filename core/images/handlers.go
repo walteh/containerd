@@ -306,7 +306,7 @@ func LimitManifests(f HandlerFunc, m platforms.MatchComparer, n int) HandlerFunc
 
 			if n > 0 {
 				if len(children) == 0 {
-					return children, fmt.Errorf("no match for platform in manifest: %w", errdefs.ErrNotFound)
+					return children, fmt.Errorf("no match for platform %s in manifest %s: %w", m, desc.Digest, errdefs.ErrNotFound)
 				}
 				if len(children) > n {
 					children = children[:n]

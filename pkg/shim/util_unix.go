@@ -86,7 +86,9 @@ func SocketAddress(ctx context.Context, socketPath, id string, debug bool) (stri
 		path = filepath.Join(path, "debug")
 	}
 	d := sha256.Sum256([]byte(path))
-	return fmt.Sprintf("unix://%s/%x", filepath.Join(socketRoot, "s"), d), nil
+
+	sockroot := filepath.Dir(addressFlag)
+	return fmt.Sprintf("unix://%s/%x", filepath.Join(sockroot, "s"), d), nil
 }
 
 // AnonDialer returns a dialer for a socket

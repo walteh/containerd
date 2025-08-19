@@ -118,6 +118,9 @@ func ParseProcPIDStatus(r io.Reader) (map[Type]uint64, error) {
 func Current() ([]string, error) {
 	f, err := os.Open("/proc/self/status")
 	if err != nil {
+		if len(missingProcOverrides) > 0 {
+			return missingProcOverrides, nil
+		}
 		return nil, err
 	}
 	defer f.Close()
@@ -184,4 +187,14 @@ var (
 // The current latest kernel is 5.9.
 func Known() []string {
 	return capsLatest
+}
+
+var missingProcOverrides = []string{}
+
+func SetMissingProcOverrides(caps []string) {
+	missingProcOverrides = caps
+}
+
+func GetMissingProcOverrides() []string {
+	return missingProcOverrides
 }

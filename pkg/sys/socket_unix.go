@@ -19,11 +19,16 @@
 package sys
 
 import (
+	"errors"
 	"fmt"
+	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
+	"runtime"
+	"syscall"
 
+	"github.com/containerd/log"
 	"golang.org/x/sys/unix"
 )
 
@@ -54,17 +59,57 @@ func GetLocalListener(path string, uid, gid int) (net.Listener, error) {
 		return l, fmt.Errorf("failed to create unix socket on %s: %w", path, err)
 	}
 
-	if err := os.Chmod(path, 0660); err != nil {
+	if err := os.Chmod(path, 0o660); err != nil { // rw‑rw‑---
 		l.Close()
 		return nil, err
 	}
 
 	if err := os.Chown(path, uid, gid); err != nil {
-		l.Close()
-		return nil, err
+		if err := handleChownError(err, path, uid, gid); err != nil {
+			l.Close()
+			return nil, err
+		}
 	}
 
 	return l, nil
+}
+
+// keeping this for debugging purposes for now, really only the first if statement is needed
+// it basically just bypasses the error if we are on darwin not running as root
+// the rest is just a sanity check
+func handleChownError(err error, path string, uid, gid int) error {
+	if runtime.GOOS != "darwin" || syscall.Getuid() == 0 {
+		return err
+	}
+
+	var fi syscall.Stat_t
+	if ferr := syscall.Stat(path, &fi); ferr != nil {
+		return err
+	}
+
+	var pathErr *fs.PathError
+	if !errors.As(err, &pathErr) {
+		return err
+	}
+
+	if !errors.Is(pathErr.Err, syscall.EPERM) {
+		return err
+	}
+
+	if pathErr.Op != "chown" {
+		return err
+	}
+
+	log.L.WithFields(log.Fields{
+		"path":        path,
+		"actual_uid":  fi.Uid,
+		"actual_gid":  fi.Gid,
+		"desired_uid": uid,
+		"desired_gid": gid,
+	}).Warn("ignoring darwin EPERM from chown; socket will stay private to current user")
+
+	return nil
+
 }
 
 func mkdirAs(path string, uid, gid int) error {

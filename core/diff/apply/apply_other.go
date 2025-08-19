@@ -45,7 +45,11 @@ func apply(ctx context.Context, mounts []mount.Mount, r io.Reader, _sync bool) e
 	}
 
 	return mount.WithTempMount(ctx, mounts, func(root string) error {
-		_, err := archive.Apply(ctx, root, r)
+		opts := []archive.ApplyOpt{}
+		if os.Getuid() != 0 {
+			opts = append(opts, archive.WithNoSameOwner())
+		}
+		_, err := archive.Apply(ctx, root, r, opts...)
 		return err
 	})
 }

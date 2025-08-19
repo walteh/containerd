@@ -96,12 +96,6 @@ func init() {
 	}
 }
 
-var hackedClientOpts = []grpc.DialOption{}
-
-func AddHackedClientOpts(opts ...grpc.DialOption) {
-	hackedClientOpts = append(hackedClientOpts, opts...)
-}
-
 // New returns a new containerd client that is connected to the containerd
 // instance provided by address
 func New(address string, opts ...Opt) (*Client, error) {
@@ -160,8 +154,6 @@ func New(address string, opts ...Opt) (*Client, error) {
 			gopts = append(gopts, grpc.WithChainUnaryInterceptor(unary))
 			gopts = append(gopts, grpc.WithChainStreamInterceptor(stream))
 		}
-
-		gopts = append(gopts, hackedClientOpts...)
 
 		connector := func() (*grpc.ClientConn, error) {
 			conn, err := grpc.NewClient(dialer.DialAddress(address), gopts...)
